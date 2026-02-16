@@ -1,5 +1,7 @@
+from __future__ import annotations
 from typing import TypeAlias
-from ast import Expression
+from typing import Union
+Expression: TypeAlias = "Token | Operation | FunctionCall | FieldAccess | If | While"
 from tokenizer import TokenType, Token
 from dataclasses import dataclass
 
@@ -93,7 +95,7 @@ class Var:
     default_value: Expression | None
 
     def __repr__(self):
-        return f"var {self.name.value}{' ' + self.type_hint.value if self.type_hint else ''}{' = ' + str(self.default_value) if self.default_value else ''}"
+        return f"var {self.name.value}{' ' + str(self.type_hint) if self.type_hint else ''}{' = ' + str(self.default_value) if self.default_value else ''}"
 
 
 @dataclass(slots=True)

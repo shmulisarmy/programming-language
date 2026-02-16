@@ -195,7 +195,7 @@ class Parser:
     def parse_var(self):
         name = self.expect_token(TokenType.IDENTIFIER)
         if self.current_token().type == TokenType.IDENTIFIER:
-            type_hint = self.expect_token(TokenType.IDENTIFIER)
+            type_hint = Type(self.expect_token(TokenType.IDENTIFIER))
         else:
             type_hint = None
         if self.optionally_expect_token(TokenType.ASSIGNMENT):

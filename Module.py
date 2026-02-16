@@ -8,7 +8,7 @@ from m_ast import ClassDef
 from m_ast import Return
 from m_ast import Statement
 from byte_code import Instruction
-from m_ast import Var, FunctionDef, Import, Operation, FunctionCall, Token  
+from m_ast import Var, FunctionDef, Import, Operation, FunctionCall, Token, Expression  
 from dataclasses import dataclass, field
 
 Symbol = Var | FunctionDef | Import

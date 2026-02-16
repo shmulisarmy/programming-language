@@ -79,8 +79,8 @@ class Token:
         return blue(f"{self.file_name}:{self.pos.line}:{self.pos.col}")
 
 
-    # def __str__(self):
-    #     return f"{self.value}"
+    def __str__(self):
+        return f"{self.value}"
 
 
 # ============================================================
@@ -152,6 +152,7 @@ class Tokenizer:
                 self.tokens.append(
                     Token(TokenType.ASSIGNMENT, value, Pos(start_line, start_col), self.file_name)
                 )
+                self._advance_position(value)
                 continue
 
             if kind == "NEWLINE":
