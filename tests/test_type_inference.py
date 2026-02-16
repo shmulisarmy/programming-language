@@ -1,120 +1,122 @@
 import pytest
-from tokenizer import Token, TokenType, Pos
-from m_ast import Operation, FunctionCall, FunctionDef, Var, Type, Return, Token as ASTToken
-from Module import Module
+from tokenizer import Tokenizer
+from parser import Parser
+from Module import Module, same_type
+from m_ast import FunctionDef, Return, Assignment, Var
 
-def create_token(kind, value):
-    return Token(kind, value, Pos(1, 1), "test.py")
+def parse_to_module(code):
+    tokens = Tokenizer(code).tokenize()
+    parser = Parser(tokens)
+    return parser.parse_file()
 
-def test_get_expression_type_literals():
-    m = Module("test")
-    f = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
+def test_e2e_literal_inference():
+    code = """
+    def main() {
+        return 123
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
     
-    # Number literal
-    num_token = create_token(TokenType.NUMBER, "123")
-    assert m.get_expression_type(f, num_token) == "number"
-    
-    # String literal
-    str_token = create_token(TokenType.STRING, '"hello"')
-    assert m.get_expression_type(f, str_token) == "string"
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "number")
 
-def test_get_expression_type_identifier():
-    m = Module("test")
-    # Define a variable in the function
-    var_name = create_token(TokenType.IDENTIFIER, "x")
-    type_hint = Type(create_token(TokenType.IDENTIFIER, "number"))
-    v = Var(var_name, type_hint, None)
+def test_e2e_variable_inference():
+    code = """
+    def main(x number) {
+        return x
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
     
-    f = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [v], [])
-    
-    # Identifier lookup
-    id_token = create_token(TokenType.IDENTIFIER, "x")
-    # get_local_type returns the Type object or inferred type
-    res = m.get_expression_type(f, id_token)
-    assert str(res) == "number"
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "number")
 
-def test_get_expression_type_operation():
-    m = Module("test")
-    f = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
+def test_e2e_operation_inference():
+    code = """
+    def main() {
+        return 1 + 2 * 3
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
     
-    t1 = create_token(TokenType.NUMBER, "1")
-    t2 = create_token(TokenType.NUMBER, "2")
-    op_token = create_token(TokenType.OPERATOR, "+")
-    
-    op = Operation(t1, op_token, t2)
-    assert m.get_expression_type(f, op) == "number"
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "number")
 
-def test_get_expression_type_operation_mismatch():
-    m = Module("test")
-    f = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
+def test_e2e_string_inference():
+    code = """
+    def main() {
+        return "hello" + " world"
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
     
-    t1 = create_token(TokenType.NUMBER, "1")
-    t2 = create_token(TokenType.STRING, '"a"')
-    op_token = create_token(TokenType.OPERATOR, "+")
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "string")
+
+def test_e2e_function_call_inference():
+    code = """
+    def add(a number, b number) {
+        return a + b
+    }
+    def main() {
+        return add(1, 2)
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
     
-    op = Operation(t1, op_token, t2)
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "number")
+
+def test_e2e_local_var_inference():
+    code = """
+    def main() {
+        var x number = 10
+        return x
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    # body[0] is Var, body[1] is Return
+    ret_stmt = main_func.body[1]
+    
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "number")
+
+def test_e2e_mismatched_types_error():
+    code = """
+    def main() {
+        return 1 + "string"
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
+    
     with pytest.raises(AssertionError):
-        m.get_expression_type(f, op)
+        module.get_expression_type(main_func, ret_stmt.value)
 
-def test_get_expression_type_function_call():
-    m = Module("test")
+def test_e2e_nested_function_calls():
+    code = """
+    def double(n number) {
+        return n * 2
+    }
+    def main() {
+        return double(double(5))
+    }
+    """
+    module = parse_to_module(code)
+    main_func = module.symbols["main"]
+    ret_stmt = main_func.body[0]
     
-    # Define a function 'add' that returns 'number'
-    # Note: infer_return_type is currently broken but let's see how it behaves
-    param_a = Var(create_token(TokenType.IDENTIFIER, "a"), Type(create_token(TokenType.IDENTIFIER, "number")), None)
-    # We need to mock the return type inference or ensure it works
-    # Currently infer_return_type calls infer_block_return_type which is broken
-    
-    # Let's try to test a simple case and see if it fails due to the bug
-    add_func = FunctionDef(create_token(TokenType.IDENTIFIER, "add"), [param_a], [])
-    m.symbols["add"] = add_func
-    
-    f_main = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
-    call = FunctionCall(create_token(TokenType.IDENTIFIER, "add"), [create_token(TokenType.NUMBER, "1")])
-    
-    # Add a return statement to 'add' so it can infer return type
-    ret_stmt = Return(create_token(TokenType.NUMBER, "0"))
-    add_func.body.append(ret_stmt)
-    
-    res = m.get_expression_type(f_main, call)
-    assert res == "number"
-
-def test_get_expression_type_nested_operation():
-    m = Module("test")
-    f = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
-    
-    # (1 + 2) * 3
-    t1 = create_token(TokenType.NUMBER, "1")
-    t2 = create_token(TokenType.NUMBER, "2")
-    t3 = create_token(TokenType.NUMBER, "3")
-    op1 = Operation(t1, create_token(TokenType.OPERATOR, "+"), t2)
-    op2 = Operation(op1, create_token(TokenType.OPERATOR, "*"), t3)
-    
-    assert m.get_expression_type(f, op2) == "number"
-
-def test_get_expression_type_string_concatenation():
-    m = Module("test")
-    f = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
-    
-    s1 = create_token(TokenType.STRING, '"hello"')
-    s2 = create_token(TokenType.STRING, '" world"')
-    op = Operation(s1, create_token(TokenType.OPERATOR, "+"), s2)
-    
-    assert m.get_expression_type(f, op) == "string"
-
-def test_get_expression_type_complex_function_call():
-    m = Module("test")
-    
-    # def identity(x number) { return x }
-    param_x = Var(create_token(TokenType.IDENTIFIER, "x"), Type(create_token(TokenType.IDENTIFIER, "number")), None)
-    identity_func = FunctionDef(create_token(TokenType.IDENTIFIER, "identity"), [param_x], [Return(create_token(TokenType.IDENTIFIER, "x"))])
-    m.symbols["identity"] = identity_func
-    
-    f_main = FunctionDef(create_token(TokenType.IDENTIFIER, "main"), [], [])
-    
-    # identity(1 + 2)
-    arg = Operation(create_token(TokenType.NUMBER, "1"), create_token(TokenType.OPERATOR, "+"), create_token(TokenType.NUMBER, "2"))
-    call = FunctionCall(create_token(TokenType.IDENTIFIER, "identity"), [arg])
-    
-    from Module import same_type
-    assert same_type(m.get_expression_type(f_main, call), "number")
+    expr_type = module.get_expression_type(main_func, ret_stmt.value)
+    assert same_type(expr_type, "number")
