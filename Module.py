@@ -13,11 +13,17 @@ from dataclasses import dataclass, field
 
 Symbol = Var | FunctionDef | Import
 
-def same_type(a: Token | str, b: Token | str) -> bool:
-    if isinstance(a, Token):
-         a = a.value
-    if isinstance(b, Token):
-         b = b.value
+def same_type(a, b) -> bool:
+    if hasattr(a, "name") and isinstance(a.name, Token):
+        a = a.name.value
+    elif isinstance(a, Token):
+        a = a.value
+    
+    if hasattr(b, "name") and isinstance(b.name, Token):
+        b = b.name.value
+    elif isinstance(b, Token):
+        b = b.value
+        
     return a == b
 
 @dataclass
@@ -44,13 +50,13 @@ class Module:
         return self.code_block_can_fail(function_def.body)
 
     def infer_block_return_type(self, function_def: FunctionDef) -> str:
-        match stmt:
-            case If(value):
-                return self.get_expression_type(function_def, value)
-            case Return(value):
-                if value is None:
-                    return "void"
-                return self.get_expression_type(function_def, value)
+        for stmt in function_def.body:
+            match stmt:
+                case Return(value):
+                    if value is None:
+                        return "void"
+                    return self.get_expression_type(function_def, value)
+        return "void"
     def infer_return_type(self, function_def: FunctionDef) -> str:
         return_type = self.infer_block_return_type(function_def)
         if return_type:
